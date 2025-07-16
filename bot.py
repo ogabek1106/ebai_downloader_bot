@@ -14,10 +14,11 @@ import yt_dlp
 
 # 🛡️ Section 2: Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-STORAGE_CHANNEL_ID = -1002580997752  # Your private storage channel
+IG_USERNAME = os.environ.get("IG_USERNAME")
+IG_PASSWORD = os.environ.get("IG_PASSWORD")
+STORAGE_CHANNEL_ID = -1002580997752
 USER_FILE = "user_ids.json"
 
-# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,15 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Reel Download Function
+# 📥 Section 4: Reel Download Function (with login)
 def download_reel(url):
     ydl_opts = {
         'format': 'mp4',
         'outtmpl': 'reel.%(ext)s',
         'quiet': True,
         'noplaylist': True,
-        'cookiefile': 'ig_cookies.txt'
+        'username': IG_USERNAME,
+        'password': IG_PASSWORD
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
