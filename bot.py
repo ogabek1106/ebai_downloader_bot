@@ -34,35 +34,46 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Smart Reel Downloader (Unique Filenames)
+# 📥 Section 4: Smart Reel Downloader (with Aspect Ratio Check)
 def download_reel(url):
-    formats = [
-        'mp4',
-        'mp4[height<=720]',
-        'mp4[height<=480]',
-        'best'
-    ]
+    def try_download(fmt):
+        unique_name = f"reel_{int(time.time()*1000)}"
+        ydl_opts = {
+            'format': fmt,
+            'outtmpl': f'{unique_name}.%(ext)s',
+            'quiet': True,
+            'noplaylist': True,
+            'cookiefile': 'ig_cookies.txt'
+        }
 
-    for fmt in formats:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            return filename, info
+
+    base_formats = ['mp4[height<=720]', 'mp4[height<=480]', 'best']
+    wide_format = 'bestvideo[ext=mp4][width>=720]+bestaudio/best[ext=mp4][width>=720]'
+
+    for fmt in base_formats:
         try:
-            unique_name = f"reel_{int(time.time()*1000)}"
-            ydl_opts = {
-                'format': fmt,
-                'outtmpl': f'{unique_name}.%(ext)s',
-                'quiet': True,
-                'noplaylist': True,
-                'cookiefile': 'ig_cookies.txt'
-            }
+            filename, info = try_download(fmt)
+            size_mb = os.path.getsize(filename) / 1024 / 1024
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
+            if info.get("width") and info.get("height"):
+                ratio = info["width"] / info["height"]
+                if ratio < 0.8:
+                    # Try wider format once
+                    try:
+                        os.remove(filename)
+                        filename, info = try_download(wide_format)
+                        size_mb = os.path.getsize(filename) / 1024 / 1024
+                    except Exception as e:
+                        logger.warning(f"Wide format not available: {e}")
 
-                size_mb = os.path.getsize(filename) / 1024 / 1024
-                if size_mb <= 49:
-                    return filename, info
+            if size_mb <= 49:
+                return filename, info
 
-                os.remove(filename)
+            os.remove(filename)
 
         except Exception as e:
             logger.warning(f"Format {fmt} failed: {e}")
