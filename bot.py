@@ -49,6 +49,10 @@ def download_reel(url):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+
+            if not os.path.exists(filename):
+                raise Exception("❌ Video file not created. Download may have failed.")
+
             return filename, info
 
     base_formats = ['mp4[height<=720]', 'mp4[height<=480]', 'best']
@@ -62,7 +66,6 @@ def download_reel(url):
             if info.get("width") and info.get("height"):
                 ratio = info["width"] / info["height"]
                 if ratio < 0.8:
-                    # Try wider format once
                     try:
                         os.remove(filename)
                         filename, info = try_download(wide_format)
@@ -118,7 +121,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"📅 {timestamp}\n👤 {name}"
 
-        # 📤 Send to storage channel always
+        # 📤 Send to storage channel
         storage_msg = await context.bot.send_video(
             chat_id=STORAGE_CHANNEL_ID,
             video=video,
@@ -159,7 +162,6 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 disable_web_page_preview=True
             )
 
-            # 🧼 Delete message after 3 minutes
             async def auto_delete():
                 await asyncio.sleep(180)
                 await too_big_msg.delete()
