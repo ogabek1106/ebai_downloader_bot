@@ -88,26 +88,30 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=video, caption=caption)
         video.close()
 
-        # ⏳ Countdown message
-        countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
-        for i in range(50, 0, -10):
-            await asyncio.sleep(10)
-            await countdown_msg.edit_text(f"⏳ {i}s remaining...")
-        await asyncio.sleep(10)
-        await countdown_msg.edit_text("✅ See you soon!")
+        # ⏳ Background countdown and cleanup
+        async def countdown_and_cleanup():
+            try:
+                countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
+                for i in range(50, 0, -10):
+                    await asyncio.sleep(10)
+                    await countdown_msg.edit_text(f"⏳ {i}s remaining...")
+                await asyncio.sleep(10)
+                await countdown_msg.edit_text("✅ See you soon!")
+                await asyncio.sleep(5)
+                await sent_video.delete()
+                await countdown_msg.delete()
+                await update.message.delete()
+                os.remove(filename)
+            except Exception as e:
+                logger.error(f"Countdown error: {e}")
 
-        # 🧹 Cleanup
-        await asyncio.sleep(5)
-        await sent_video.delete()
-        await countdown_msg.delete()
-        await update.message.delete()
-        os.remove(filename)
+        context.application.create_task(countdown_and_cleanup())
 
     except Exception as e:
         logger.error(f"Download error: {e}")
         await update.message.reply_text("⚠️ Failed to download the reel. Try another link or make sure it’s public.")
 
-# 🚀 Section 6: Start the Bot
+# 🚀 Section 6: Run the Bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
