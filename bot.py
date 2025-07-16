@@ -33,8 +33,11 @@ def download_reel(url):
 # 🤖 Section 4: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Welcome to EBAI Reels Downloader!\n\n"
-        "Just send me an Instagram Reel link. I’ll download it, store it, and auto-delete after 60 seconds. 🔥"
+        "👋 *Welcome to EBAI Reels Downloader!*\n\n"
+        "*Just send me an Instagram Reel link. I’ll send it to you*\n\n"
+        "⚠️ _We do not store or save downloaded content. All sent content will be auto-deleted from the chat after 60 seconds._ 🔥\n\n"
+        "Any questions? Contact 👉 @Ogabek1106",
+        parse_mode="Markdown"
     )
 
 async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
