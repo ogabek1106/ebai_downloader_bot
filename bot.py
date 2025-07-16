@@ -14,9 +14,7 @@ import yt_dlp
 
 # 🛡️ Section 2: Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-IG_USERNAME = os.environ.get("IG_USERNAME")
-IG_PASSWORD = os.environ.get("IG_PASSWORD")
-STORAGE_CHANNEL_ID = -1002580997752
+STORAGE_CHANNEL_ID = -1002580997752  # EBAI Downloader Storage
 USER_FILE = "user_ids.json"
 
 logging.basicConfig(level=logging.INFO)
@@ -35,15 +33,14 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Reel Download Function (with login)
+# 📥 Section 4: Reel Download Function (with cookies)
 def download_reel(url):
     ydl_opts = {
         'format': 'mp4',
         'outtmpl': 'reel.%(ext)s',
         'quiet': True,
         'noplaylist': True,
-        'username': IG_USERNAME,
-        'password': IG_PASSWORD
+        'cookiefile': 'ig_cookies.txt'
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
