@@ -32,33 +32,45 @@ def download_reel(url):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Welcome to EBAI Reels Downloader!\n\n"
-        "Just send me an Instagram Reel link. I’ll download it and delete it after 60 seconds. 🔥"
+        "Just send me an Instagram Reel link.\nI’ll download it and delete it after 60 seconds. 🔥"
     )
 
 async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
-    # Basic check to make sure it's an Instagram reel
     if not re.match(r'https?://(www\.)?instagram\.com/reel/', url):
         return
 
     try:
         filename = download_reel(url)
         video = open(filename, 'rb')
-        sent_msg = await update.message.reply_video(
-            video=video,
-            caption="📥 Here is your Reel! Auto-deletes in 60 seconds."
-        )
-        await asyncio.sleep(60)
-        await sent_msg.delete()
-        await update.message.delete()
+        sent_video = await update.message.reply_video(video=video)
         video.close()
+
+        # Countdown message below video
+        countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
+
+        # Countdown loop every 10 seconds
+        for i in range(50, 0, -10):
+            await asyncio.sleep(10)
+            await countdown_msg.edit_text(f"⏳ {i}s remaining...")
+
+        # Final message
+        await asyncio.sleep(10)
+        await countdown_msg.edit_text("✅ See you soon!")
+
+        # Wait a bit, then clean up
+        await asyncio.sleep(5)
+        await sent_video.delete()
+        await countdown_msg.delete()
+        await update.message.delete()
         os.remove(filename)
+
     except Exception as e:
         logger.error(f"Download error: {e}")
         await update.message.reply_text("⚠️ Failed to download the reel. Try another link or make sure it’s public.")
 
-# 🚀 Section 5: Run the Bot
+# 🚀 Section 5: Start the Bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
