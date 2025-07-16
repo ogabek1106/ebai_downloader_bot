@@ -33,38 +33,40 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Smart Reel Downloader with fallback
-def download_reel(url, quality_try=0):
-    format_list = ['mp4', 'mp4[height<=720]', 'bestvideo+bestaudio', 'best']
+# 📥 Section 4: Smart Quality-Controlled Reel Downloader
+def download_reel(url):
+    formats = [
+        'mp4',
+        'mp4[height<=720]',
+        'mp4[height<=480]',
+        'best'
+    ]
 
-    if quality_try >= len(format_list):
-        raise Exception("❌ No working formats available.")
+    for fmt in formats:
+        try:
+            ydl_opts = {
+                'format': fmt,
+                'outtmpl': 'reel.%(ext)s',
+                'quiet': True,
+                'noplaylist': True,
+                'cookiefile': 'ig_cookies.txt'
+            }
 
-    ydl_opts = {
-        'format': format_list[quality_try],
-        'outtmpl': 'reel.%(ext)s',
-        'quiet': True,
-        'noplaylist': True,
-        'cookiefile': 'ig_cookies.txt'
-    }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-
-            # File size check (only for highest quality)
-            if quality_try == 0:
                 size_mb = os.path.getsize(filename) / 1024 / 1024
-                if size_mb > 50:
-                    os.remove(filename)
-                    return download_reel(url, quality_try + 1)
+                if size_mb <= 49:  # fits Telegram limit
+                    return filename
 
-            return filename
+                os.remove(filename)  # too big, try next
 
-    except Exception as e:
-        logger.warning(f"Fallback triggered: {e}")
-        return download_reel(url, quality_try + 1)
+        except Exception as e:
+            logger.warning(f"Format {fmt} failed: {e}")
+            continue
+
+    raise Exception("❌ No suitable format under 50 MB found.")
 
 # 🤖 Section 5: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -86,9 +88,9 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # ✅ Track user
         user = update.effective_user
         user_id = user.id
+
         if user_id not in user_ids:
             user_ids.append(user_id)
             save_users(user_ids)
@@ -107,7 +109,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=video, caption=caption)
         video.close()
 
-        # ⏳ Background countdown and cleanup
+        # ⏳ Delete after 60s
         async def countdown_and_cleanup():
             try:
                 countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
