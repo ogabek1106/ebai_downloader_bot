@@ -33,29 +33,38 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Reel Downloader with auto-quality
-def download_reel(url, low_quality=False):
-    format_selector = 'mp4[height<=720]' if low_quality else 'mp4'
+# 📥 Section 4: Smart Reel Downloader with fallback
+def download_reel(url, quality_try=0):
+    format_list = ['mp4', 'mp4[height<=720]', 'bestvideo+bestaudio', 'best']
+
+    if quality_try >= len(format_list):
+        raise Exception("❌ No working formats available.")
 
     ydl_opts = {
-        'format': format_selector,
+        'format': format_list[quality_try],
         'outtmpl': 'reel.%(ext)s',
         'quiet': True,
         'noplaylist': True,
         'cookiefile': 'ig_cookies.txt'
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
 
-        if not low_quality:
-            size_mb = os.path.getsize(filename) / 1024 / 1024
-            if size_mb > 50:
-                os.remove(filename)
-                return download_reel(url, low_quality=True)
+            # File size check (only for highest quality)
+            if quality_try == 0:
+                size_mb = os.path.getsize(filename) / 1024 / 1024
+                if size_mb > 50:
+                    os.remove(filename)
+                    return download_reel(url, quality_try + 1)
 
-        return filename
+            return filename
+
+    except Exception as e:
+        logger.warning(f"Fallback triggered: {e}")
+        return download_reel(url, quality_try + 1)
 
 # 🤖 Section 5: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
