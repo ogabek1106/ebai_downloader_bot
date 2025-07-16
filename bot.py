@@ -57,10 +57,10 @@ def download_reel(url):
                 filename = ydl.prepare_filename(info)
 
                 size_mb = os.path.getsize(filename) / 1024 / 1024
-                if size_mb <= 49:  # fits Telegram limit
-                    return filename
+                if size_mb <= 49:
+                    return filename, info
 
-                os.remove(filename)  # too big, try next
+                os.remove(filename)
 
         except Exception as e:
             logger.warning(f"Format {fmt} failed: {e}")
@@ -83,50 +83,77 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-
     if not re.match(r'https?://(www\.)?instagram\.com/reel/', url):
         return
 
+    user = update.effective_user
+    user_id = user.id
+
+    if user_id not in user_ids:
+        user_ids.append(user_id)
+        save_users(user_ids)
+
+    # 🧑🏻‍💻 Send "Downloading..." message
+    downloading_msg = await update.message.reply_text("Downloading...👨🏻‍💻")
+
     try:
-        user = update.effective_user
-        user_id = user.id
-
-        if user_id not in user_ids:
-            user_ids.append(user_id)
-            save_users(user_ids)
-
-        filename = download_reel(url)
+        filename, info = download_reel(url)
+        size_mb = os.path.getsize(filename) / 1024 / 1024
         video = open(filename, 'rb')
 
-        # 1️⃣ Send to user
-        sent_video = await update.message.reply_video(video=video)
-
-        # 2️⃣ Send to storage channel with caption
-        video.seek(0)
         name = f"@{user.username}" if user.username else f"{user.full_name} (ID: {user.id})"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"📅 {timestamp}\n👤 {name}"
-        await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=video, caption=caption)
-        video.close()
 
-        # ⏳ Delete after 60s
-        async def countdown_and_cleanup():
-            try:
-                countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
-                for i in range(50, 0, -10):
+        # 📤 Always send to storage channel
+        storage_msg = await context.bot.send_video(
+            chat_id=STORAGE_CHANNEL_ID,
+            video=video,
+            caption=caption
+        )
+
+        video.seek(0)
+
+        if size_mb <= 49:
+            # ✅ Send to user
+            sent_video = await update.message.reply_video(video=video)
+            video.close()
+
+            # ⏳ Countdown to delete
+            async def countdown_and_cleanup():
+                try:
+                    countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
+                    for i in range(50, 0, -10):
+                        await asyncio.sleep(10)
+                        await countdown_msg.edit_text(f"⏳ {i}s remaining...")
                     await asyncio.sleep(10)
-                    await countdown_msg.edit_text(f"⏳ {i}s remaining...")
-                await asyncio.sleep(10)
-                await countdown_msg.edit_text("✅ See you soon!")
-                await asyncio.sleep(5)
-                await sent_video.delete()
-                await countdown_msg.delete()
+                    await countdown_msg.edit_text("✅ See you soon!")
+                    await asyncio.sleep(5)
+                    await sent_video.delete()
+                    await countdown_msg.delete()
+                    await update.message.delete()
+                    os.remove(filename)
+                except Exception as e:
+                    logger.error(f"Countdown error: {e}")
+
+            context.application.create_task(countdown_and_cleanup())
+        else:
+            video.close()
+            message_link = f"https://t.me/c/{str(STORAGE_CHANNEL_ID)[4:]}/{storage_msg.message_id}"
+            too_big_msg = await update.message.reply_text(
+                f"⚠️ The video is too large to send here.\n\n📥 Download it here 👉 [View Reel]({message_link})",
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+
+            # 🧼 Delete message after 3 minutes
+            async def auto_delete():
+                await asyncio.sleep(180)
+                await too_big_msg.delete()
                 await update.message.delete()
                 os.remove(filename)
-            except Exception as e:
-                logger.error(f"Countdown error: {e}")
 
-        context.application.create_task(countdown_and_cleanup())
+            context.application.create_task(auto_delete())
 
     except Exception as e:
         logger.error(f"Download error: {e}")
@@ -134,6 +161,8 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Failed to download the reel.\n\nError: `{str(e)}`",
             parse_mode="Markdown"
         )
+    finally:
+        await downloading_msg.delete()
 
 # 🚀 Section 6: Run the Bot
 if __name__ == "__main__":
