@@ -14,7 +14,7 @@ import yt_dlp
 
 # 🛡️ Section 2: Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-STORAGE_CHANNEL_ID = -1002580997752  # EBAI Downloader Storage
+STORAGE_CHANNEL_ID = -1002580997752
 USER_FILE = "user_ids.json"
 
 logging.basicConfig(level=logging.INFO)
@@ -33,18 +33,29 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Reel Download Function (with cookies)
-def download_reel(url):
+# 📥 Section 4: Reel Downloader with auto-quality
+def download_reel(url, low_quality=False):
+    format_selector = 'mp4[height<=720]' if low_quality else 'mp4'
+
     ydl_opts = {
-        'format': 'mp4',
+        'format': format_selector,
         'outtmpl': 'reel.%(ext)s',
         'quiet': True,
         'noplaylist': True,
         'cookiefile': 'ig_cookies.txt'
     }
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        return ydl.prepare_filename(info)
+        filename = ydl.prepare_filename(info)
+
+        if not low_quality:
+            size_mb = os.path.getsize(filename) / 1024 / 1024
+            if size_mb > 50:
+                os.remove(filename)
+                return download_reel(url, low_quality=True)
+
+        return filename
 
 # 🤖 Section 5: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
