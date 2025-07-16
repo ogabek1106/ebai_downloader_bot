@@ -111,7 +111,10 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Download error: {e}")
-        await update.message.reply_text("⚠️ Failed to download the reel. Try another link or make sure it’s public.")
+        await update.message.reply_text(
+            f"⚠️ Failed to download the reel.\n\nError: `{str(e)}`",
+            parse_mode="Markdown"
+        )
 
 # 🚀 Section 6: Run the Bot
 if __name__ == "__main__":
