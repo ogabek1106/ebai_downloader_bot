@@ -2,6 +2,7 @@
 import os
 import re
 import json
+import time
 import asyncio
 import logging
 from datetime import datetime
@@ -33,7 +34,7 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Smart Quality-Controlled Reel Downloader
+# 📥 Section 4: Smart Reel Downloader (Unique Filenames)
 def download_reel(url):
     formats = [
         'mp4',
@@ -44,9 +45,10 @@ def download_reel(url):
 
     for fmt in formats:
         try:
+            unique_name = f"reel_{int(time.time()*1000)}"
             ydl_opts = {
                 'format': fmt,
-                'outtmpl': 'reel.%(ext)s',
+                'outtmpl': f'{unique_name}.%(ext)s',
                 'quiet': True,
                 'noplaylist': True,
                 'cookiefile': 'ig_cookies.txt'
@@ -105,7 +107,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"📅 {timestamp}\n👤 {name}"
 
-        # 📤 Always send to storage channel
+        # 📤 Send to storage channel always
         storage_msg = await context.bot.send_video(
             chat_id=STORAGE_CHANNEL_ID,
             video=video,
