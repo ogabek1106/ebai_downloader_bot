@@ -1,6 +1,7 @@
 # 📦 Section 1: Imports
 import os
 import re
+import json
 import asyncio
 import logging
 from datetime import datetime
@@ -13,12 +14,27 @@ import yt_dlp
 
 # 🛡️ Section 2: Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-STORAGE_CHANNEL_ID = -1002580997752  # Your private channel ID
+STORAGE_CHANNEL_ID = -1002580997752  # Your private storage channel
+USER_FILE = "user_ids.json"
 
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 📥 Section 3: Reel Download Function
+# 📊 Section 3: User Tracker
+def load_users():
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_users(user_ids):
+    with open(USER_FILE, "w") as f:
+        json.dump(user_ids, f)
+
+user_ids = load_users()
+
+# 📥 Section 4: Reel Download Function
 def download_reel(url):
     ydl_opts = {
         'format': 'mp4',
@@ -31,7 +47,7 @@ def download_reel(url):
         info = ydl.extract_info(url, download=True)
         return ydl.prepare_filename(info)
 
-# 🤖 Section 4: Handlers
+# 🤖 Section 5: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *Welcome to EBAI Reels Downloader!*\n\n"
@@ -41,6 +57,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"👥 Total users: {len(user_ids)}")
+
 async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
@@ -48,6 +67,13 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        # ✅ Track user
+        user = update.effective_user
+        user_id = user.id
+        if user_id not in user_ids:
+            user_ids.append(user_id)
+            save_users(user_ids)
+
         filename = download_reel(url)
         video = open(filename, 'rb')
 
@@ -56,7 +82,6 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 2️⃣ Send to storage channel with caption
         video.seek(0)
-        user = update.effective_user
         name = f"@{user.username}" if user.username else f"{user.full_name} (ID: {user.id})"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"📅 {timestamp}\n👤 {name}"
@@ -82,9 +107,10 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Download error: {e}")
         await update.message.reply_text("⚠️ Failed to download the reel. Try another link or make sure it’s public.")
 
-# 🚀 Section 5: Start Bot
+# 🚀 Section 6: Start the Bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'instagram\.com/reel'), handle_reel_link))
     app.run_polling()
