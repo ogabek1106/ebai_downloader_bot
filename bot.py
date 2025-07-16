@@ -10,8 +10,10 @@ from telegram.ext import (
 import yt_dlp
 import re
 
-# 🛡️ Section 2: Logging & Bot Token
+# 🛡️ Section 2: Logging & Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+STORAGE_CHANNEL_ID = -1002580997752  # EBAI Downloader Storage
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ def download_reel(url):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Welcome to EBAI Reels Downloader!\n\n"
-        "Just send me an Instagram Reel link.\nI’ll download it and delete it after 60 seconds. 🔥"
+        "Just send me an Instagram Reel link. I’ll download it, store it, and auto-delete after 60 seconds. 🔥"
     )
 
 async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,22 +46,26 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         filename = download_reel(url)
         video = open(filename, 'rb')
+
+        # 1️⃣ Send to user
         sent_video = await update.message.reply_video(video=video)
+
+        # 2️⃣ Send to private storage channel
+        video.seek(0)
+        await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=video)
         video.close()
 
-        # Countdown message below video
+        # ⏱ Countdown below video
         countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
 
-        # Countdown loop every 10 seconds
         for i in range(50, 0, -10):
             await asyncio.sleep(10)
             await countdown_msg.edit_text(f"⏳ {i}s remaining...")
 
-        # Final message
         await asyncio.sleep(10)
         await countdown_msg.edit_text("✅ See you soon!")
 
-        # Wait a bit, then clean up
+        # 🧹 Cleanup
         await asyncio.sleep(5)
         await sent_video.delete()
         await countdown_msg.delete()
@@ -70,7 +76,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Download error: {e}")
         await update.message.reply_text("⚠️ Failed to download the reel. Try another link or make sure it’s public.")
 
-# 🚀 Section 5: Start the Bot
+# 🚀 Section 5: Run the Bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
