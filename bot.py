@@ -34,7 +34,7 @@ def save_users(user_ids):
 
 user_ids = load_users()
 
-# 📥 Section 4: Smart Reel Downloader (with Aspect Ratio Check)
+# 📥 Section 4: Reel Downloader
 def download_reel(url):
     def try_download(fmt):
         unique_name = f"reel_{int(time.time()*1000)}"
@@ -43,15 +43,20 @@ def download_reel(url):
             'outtmpl': f'{unique_name}.%(ext)s',
             'quiet': True,
             'noplaylist': True,
-            'cookiefile': 'ig_cookies.txt'
+            'cookies': [{
+                'name': 'sessionid',
+                'value': '75749405793%3AW4A7dwxoZ4dURE%3A9%3AAYehidp6fTBSowEZYh8ssY6XPVIigXMqNtmILwky6A',
+                'domain': '.instagram.com',
+            }],
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
+            # ✅ Check if file was actually downloaded
             if not os.path.exists(filename):
-                raise Exception("❌ Video file not created. Download may have failed.")
+                raise Exception(f"❌ Video file not created. Download may have failed.")
 
             return filename, info
 
@@ -131,11 +136,9 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video.seek(0)
 
         if size_mb <= 49:
-            # ✅ Send to user
             sent_video = await update.message.reply_video(video=video)
             video.close()
 
-            # ⏳ Countdown to delete
             async def countdown_and_cleanup():
                 try:
                     countdown_msg = await update.message.reply_text("⏳ 60s remaining...", reply_to_message_id=sent_video.message_id)
