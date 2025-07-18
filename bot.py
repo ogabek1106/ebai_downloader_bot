@@ -17,6 +17,7 @@ import yt_dlp
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 STORAGE_CHANNEL_ID = -1002580997752
 USER_FILE = "user_ids.json"
+COOKIE_STRING = "75749405793%3AW4A7dwxoZ4dURE%3A9%3AAYehidp6fTBSowEZYh8ssY6XPVIigXMqNtmILwky6A"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,21 +44,15 @@ def download_reel(url):
             'outtmpl': f'{unique_name}.%(ext)s',
             'quiet': True,
             'noplaylist': True,
-            'cookies': [{
-                'name': 'sessionid',
-                'value': '75749405793%3AW4A7dwxoZ4dURE%3A9%3AAYehidp6fTBSowEZYh8ssY6XPVIigXMqNtmILwky6A',
-                'domain': '.instagram.com',
-            }],
+            'cookiesfrombrowser': ('chrome',),
+            'cookiefile': 'ig_cookies.txt'
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-
-            # ✅ Check if file was actually downloaded
             if not os.path.exists(filename):
-                raise Exception(f"❌ Video file not created. Download may have failed.")
-
+                raise Exception("❌ File not saved after download.")
             return filename, info
 
     base_formats = ['mp4[height<=720]', 'mp4[height<=480]', 'best']
@@ -67,27 +62,21 @@ def download_reel(url):
         try:
             filename, info = try_download(fmt)
             size_mb = os.path.getsize(filename) / 1024 / 1024
-
             if info.get("width") and info.get("height"):
                 ratio = info["width"] / info["height"]
                 if ratio < 0.8:
                     try:
                         os.remove(filename)
                         filename, info = try_download(wide_format)
-                        size_mb = os.path.getsize(filename) / 1024 / 1024
                     except Exception as e:
-                        logger.warning(f"Wide format not available: {e}")
+                        logger.warning(f"Wide format fallback failed: {e}")
 
-            if size_mb <= 49:
-                return filename, info
-
-            os.remove(filename)
-
+            return filename, info
         except Exception as e:
-            logger.warning(f"Format {fmt} failed: {e}")
+            logger.warning(f"Download failed for format {fmt}: {e}")
             continue
 
-    raise Exception("❌ No suitable format under 50 MB found.")
+    raise Exception("❌ No suitable format found or video > 50MB")
 
 # 🤖 Section 5: Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -114,11 +103,15 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_ids.append(user_id)
         save_users(user_ids)
 
-    # 🧑🏻‍💻 Send "Downloading..." message
+    # 👨🏻‍💻 Notify user
     downloading_msg = await update.message.reply_text("Downloading...👨🏻‍💻")
 
     try:
         filename, info = download_reel(url)
+
+        if not os.path.exists(filename):
+            raise Exception("❌ File not found after download.")
+
         size_mb = os.path.getsize(filename) / 1024 / 1024
         video = open(filename, 'rb')
 
@@ -126,7 +119,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"📅 {timestamp}\n👤 {name}"
 
-        # 📤 Send to storage channel
+        # Send to private storage channel
         storage_msg = await context.bot.send_video(
             chat_id=STORAGE_CHANNEL_ID,
             video=video,
@@ -153,9 +146,10 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.delete()
                     os.remove(filename)
                 except Exception as e:
-                    logger.error(f"Countdown error: {e}")
+                    logger.error(f"Cleanup error: {e}")
 
             context.application.create_task(countdown_and_cleanup())
+
         else:
             video.close()
             message_link = f"https://t.me/c/{str(STORAGE_CHANNEL_ID)[4:]}/{storage_msg.message_id}"
@@ -182,7 +176,7 @@ async def handle_reel_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         await downloading_msg.delete()
 
-# 🚀 Section 6: Run the Bot
+# 🚀 Section 6: Run Bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
